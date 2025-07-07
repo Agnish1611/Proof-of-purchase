@@ -39,7 +39,10 @@ const userSchema = new Schema<IUser>(
     timestamps: true,
     toJSON: {
       transform: function(doc, ret) {
-        delete ret.password;
+        // TS2790 fix: Only delete if property exists and is not required
+        if (Object.prototype.hasOwnProperty.call(ret, 'password')) {
+          delete (ret as { password?: string }).password;
+        }
         return ret;
       }
     }
