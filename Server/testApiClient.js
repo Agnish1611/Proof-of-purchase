@@ -76,6 +76,16 @@ async function testAll() {
     const createCampaignRes = await axios.post(`${API}/campaigns/scan`, campaignData, authHeaders);
     console.log('Create campaign response:', createCampaignRes.data);
 
+    // --- Scan Product ---
+    console.log('\n--- Scan Product ---');
+    const scanData = {
+      wallet_address: 'WALLET_ABC123',
+      sku: 'SKU12345',
+      location: 'Bangalore, India'
+    };
+    const scanRes = await axios.post(`${API}/scan`, scanData, authHeaders);
+    console.log('Scan product response:', scanRes.data);
+
   } catch (err) {
     if (err.response) {
       console.error('Error:', err.response.data);

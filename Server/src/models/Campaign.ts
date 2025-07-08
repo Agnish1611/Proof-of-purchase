@@ -1,8 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
 
 export interface CampaignType extends mongoose.Document {
-  id: string;
+  _id: string;
   title: string;
   brand: string;
   required_skus: string[];
@@ -14,7 +13,6 @@ export interface CampaignType extends mongoose.Document {
 }
 
 const campaignSchema = new Schema<CampaignType>({
-  id: { type: String, default: uuidv4, unique: true },
   title: { type: String, required: true },
   brand: { type: String, required: true },
   required_skus: { type: [String], required: true },
