@@ -26,3 +26,13 @@ export interface RegisterCredentials {
   email: string;
   password: string;
 }
+
+export interface Product extends Document {
+  name : string;
+  _id : string,
+  has_warranty: boolean,
+  warranty_days : number,
+  sku: string,
+  brand: string,
+  category: string
+}

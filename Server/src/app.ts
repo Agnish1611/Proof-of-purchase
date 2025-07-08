@@ -8,6 +8,8 @@ import { config } from './config/environment';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
+import productRoutes from './routes/productRoutes';
+import campaignRoutes from './routes/campaignRoutes';
 
 const app = express();
 
@@ -57,6 +59,8 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api', productRoutes);
+app.use('/api', campaignRoutes);
 
 // Catch-all route for undefined API routes (fix for path-to-regexp error)
 app.use('/api', notFound);
