@@ -9,5 +9,5 @@ export const config = {
   JWT_SECRET: process.env.JWT_SECRET || 'fallback-secret',
   JWT_EXPIRE: process.env.JWT_EXPIRE || '7d',
   COOKIE_SECRET: process.env.COOKIE_SECRET || 'fallback-cookie-secret',
-  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000'
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:8081'
 };

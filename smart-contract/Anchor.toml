@@ -8,12 +8,15 @@ skip-lint = false
 [programs.localnet]
 walmart_contract = "pU5DzQPweFLmigGKEQtA7v8NRG5PThRrR3Qvqo6ECU2"
 
+[programs.devnet]
+walmart_contract = "4Jm1ZvaFtKQ5RXbCawUcbumaZtb6sBbn4TdmM9zv6TGL"
+
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+cluster = "devnet"
+wallet = "/home/agnish/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
