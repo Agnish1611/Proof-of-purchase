@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount, Transfer};
 
-declare_id!("GTYhiTQyCbP4F3KQXqkYXoBmuio33UZ3E5FhxYdALN2o");
+declare_id!("pU5DzQPweFLmigGKEQtA7v8NRG5PThRrR3Qvqo6ECU2");
 
 #[error_code]
 pub enum ErrorCode {
@@ -43,7 +43,7 @@ pub struct Campaign {
 }
 
 #[program]
-pub mod contracts {
+pub mod walmart_contract {
     use super::*;
 
     pub fn initialize_user(ctx: Context<InitializeUser>) -> Result<()> {
