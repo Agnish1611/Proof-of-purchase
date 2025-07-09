@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount, Transfer};
+use anchor_spl::token::{Mint, mint_to, Token, TokenAccount};
 
 declare_id!("pU5DzQPweFLmigGKEQtA7v8NRG5PThRrR3Qvqo6ECU2");
 
@@ -11,7 +11,6 @@ pub enum ErrorCode {
     CampaignNotActive,
 }
 
-// PDA: seeds = [b"user", user_wallet]
 #[account]
 pub struct UserAccount {
     pub wallet: Pubkey,
@@ -20,7 +19,6 @@ pub struct UserAccount {
     pub loyalty_tier: u8,
 }
 
-// PDA: seeds = [b"scan", user_wallet, sku, timestamp]
 #[account]
 pub struct ScanLog {
     pub user: Pubkey,
@@ -29,7 +27,6 @@ pub struct ScanLog {
     pub warranty_days: u64,
 }
 
-// PDA: seeds = [b"campaign", campaign_id]
 #[account]
 pub struct Campaign {
     pub campaign_id: String,
@@ -45,15 +42,14 @@ pub struct Campaign {
 #[program]
 pub mod walmart_contract {
     use super::*;
+    use anchor_spl::token::MintTo;
 
     pub fn initialize_user(ctx: Context<InitializeUser>) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
-
         user_account.wallet = ctx.accounts.user.key();
         user_account.scan_count = 0;
         user_account.tokens_earned = 0;
         user_account.loyalty_tier = 0;
-
         Ok(())
     }
 
@@ -65,14 +61,11 @@ pub mod walmart_contract {
     ) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         let scan_log = &mut ctx.accounts.scan_log;
-
-        user_account.scan_count += 1;
-
+        user_account.scan_count = user_account.scan_count.checked_add(1).unwrap();
         scan_log.user = ctx.accounts.user.key();
         scan_log.sku = sku;
         scan_log.timestamp = timestamp;
         scan_log.warranty_days = warranty_days;
-
         Ok(())
     }
 
@@ -88,7 +81,6 @@ pub mod walmart_contract {
         end_date: u64,
     ) -> Result<()> {
         let campaign = &mut ctx.accounts.campaign;
-
         campaign.campaign_id = campaign_id;
         campaign.brand = brand;
         campaign.required_skus = required_skus;
@@ -97,47 +89,41 @@ pub mod walmart_contract {
         campaign.token_mint = token_mint;
         campaign.start_date = start_date;
         campaign.end_date = end_date;
-
         Ok(())
     }
 
     pub fn complete_campaign(ctx: Context<CompleteCampaign>) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         let campaign = &ctx.accounts.campaign;
-
         if user_account.scan_count < campaign.scan_count_req {
             return Err(ErrorCode::InsufficientScans.into());
         }
-
-        let clock = Clock::get()?.unix_timestamp as u64;
-        if clock < campaign.start_date || clock > campaign.end_date {
+        let now = Clock::get()?.unix_timestamp as u64;
+        if now < campaign.start_date || now > campaign.end_date {
             return Err(ErrorCode::CampaignNotActive.into());
         }
+        user_account.tokens_earned = user_account.tokens_earned.checked_add(campaign.reward_tokens).unwrap();
 
-        user_account.tokens_earned += campaign.reward_tokens;
-
-        let cpi_accounts = Transfer {
-            from: ctx.accounts.reward_vault.to_account_info(),
+        let cpi_accounts = MintTo {
+            mint: ctx.accounts.token_mint.to_account_info(),
             to: ctx.accounts.user_token_account.to_account_info(),
             authority: ctx.accounts.vault_authority.to_account_info(),
         };
-
         let bump = ctx.bumps.vault_authority;
         let seeds: &[&[u8]] = &[b"vault-authority", &[bump]];
-
         let signer_seeds: &[&[&[u8]]] = &[seeds];
 
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
-
-        anchor_spl::token::transfer(cpi_ctx, campaign.reward_tokens)?;
-
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            cpi_accounts,
+            signer_seeds,
+        );
+        mint_to(cpi_ctx, campaign.reward_tokens)?;
         Ok(())
     }
 
     pub fn upgrade_loyalty(ctx: Context<UpgradeLoyalty>) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
-
         if user_account.scan_count >= 100 && user_account.loyalty_tier < 3 {
             user_account.loyalty_tier += 1;
         } else if user_account.scan_count >= 50 && user_account.loyalty_tier < 2 {
@@ -145,7 +131,6 @@ pub mod walmart_contract {
         } else if user_account.scan_count >= 10 && user_account.loyalty_tier < 1 {
             user_account.loyalty_tier += 1;
         }
-
         Ok(())
     }
 }
@@ -154,67 +139,44 @@ pub mod walmart_contract {
 pub struct InitializeUser<'info> {
     #[account(init, seeds = [b"user", user.key().as_ref()], bump, payer = user, space = 8 + 32 + 4 + 8 + 1)]
     pub user_account: Account<'info, UserAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
+    #[account(mut)] pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(sku: String, timestamp: u64, warranty_days: u64,)]
+#[instruction(sku: String, timestamp: u64, warranty_days: u64)]
 pub struct LogScan<'info> {
     #[account(mut, seeds = [b"user", user.key().as_ref()], bump)]
     pub user_account: Account<'info, UserAccount>,
-
-    #[account(init, seeds = [b"scan", user.key().as_ref(), sku.as_bytes(), &timestamp.to_le_bytes()], bump, payer = user, space = 8 + 32 + 4 + 16 + 8 + 8)]
+    #[account(init, seeds = [b"scan", user.key().as_ref(), sku.as_bytes(), &timestamp.to_le_bytes()], bump, payer = user, space = 8 + 32 + (4 + 32) + 8 + 8)]
     pub scan_log: Account<'info, ScanLog>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
+    #[account(mut)] pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(campaign_id: String, brand: String, required_skus: Vec<String>, scan_count_req: u32, reward_tokens: u64, token_mint: Pubkey, start_date: u64, end_date: u64,)]
+#[instruction(campaign_id: String, brand: String, required_skus: Vec<String>, scan_count_req: u32, reward_tokens: u64, token_mint: Pubkey, start_date: u64, end_date: u64)]
 pub struct InitializeCampaign<'info> {
-    #[account(init, seeds = [b"campaign", campaign_id.as_bytes()], bump, payer = authority, space = 8 + 4 + 64 + 4 + 32 + 4 + 200 + 4 + 8 + 32 + 8 + 8)]
+    #[account(init, seeds = [b"campaign", campaign_id.as_bytes()], bump, payer = authority, space = 8 + (4 + 32) + (4 + 32) + (4 + required_skus.len() * 32) + 4 + 8 + 32 + 8 + 8)]
     pub campaign: Account<'info, Campaign>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
+    #[account(mut)] pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct CompleteCampaign<'info> {
-    #[account(mut)]
-    pub user_account: Account<'info, UserAccount>,
-
-    #[account()]
+    #[account(mut)] pub user_account: Account<'info, UserAccount>,
     pub campaign: Account<'info, Campaign>,
-
-    #[account(mut)]
-    pub reward_vault: Account<'info, TokenAccount>, // holds tokens
-    #[account(mut)]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    /// CHECK: PDA used as vault authority — validated via defined seeds and bump
-    #[account(seeds = [b"vault-authority"], bump)]
-    pub vault_authority: AccountInfo<'info>,
-
+    #[account(mut)] pub token_mint: Account<'info, Mint>,
+    #[account(mut)] pub user_token_account: Account<'info, TokenAccount>,
+    /// CHECK: PDA used as mint authority
+    #[account(seeds = [b"vault-authority"], bump)] pub vault_authority: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct UpgradeLoyalty<'info> {
-    #[account(mut, seeds = [b"user", user.key().as_ref()], bump)]
-    pub user_account: Account<'info, UserAccount>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-
+    #[account(mut, seeds = [b"user", user.key().as_ref()], bump)] pub user_account: Account<'info, UserAccount>,
+    #[account(mut)] pub user: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
