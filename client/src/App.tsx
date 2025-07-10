@@ -24,6 +24,8 @@ import {
 import { clusterApiUrl } from "@solana/web3.js";
 
 import "@solana/wallet-adapter-react-ui/styles.css";
+import AdminDashboard from "./pages/AdminDashboard";
+import CreateCampaign from "./pages/CreateCampaign";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +54,14 @@ const App = () => {
                         <Route path="scan-history" element={<ScanHistory />} />
                         <Route path="loyalty-tier" element={<LoyaltyTier />} />
                       </Route>
+                      
+                      {/* Admin Routes */}
+                      <Route path="/admin" element={<AdminDashboard />} />
+                      <Route
+                        path="/admin/create-campaign"
+                        element={<CreateCampaign />}
+                      />
+                      
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                       <Route path="*" element={<NotFound />} />
                     </Routes>

@@ -25,6 +25,7 @@ export class ScanController {
       const scanLog = await ScanLogModel.create({
         user_id: wallet_address, // For now, use wallet_address as user_id
         product_id: product.id || product._id,
+        sku,
         scanned_at: new Date(),
         location: location || "",
         warranty_expires_at,

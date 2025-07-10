@@ -25,4 +25,18 @@ export class CampaignController {
       res.status(500).json({ success: false, message: 'Failed to create campaign' });
     }
   }
+
+  async getAllCampaigns(req: Request, res: Response) {
+    try {
+      const campaigns = await CampaignModel.find({});
+      res.status(200).json({
+        success: true,
+        message: 'Campaigns fetched successfully',
+        data: campaigns
+      });
+    } catch (err) {
+      console.log('getAllCampaigns : ', err);
+      res.status(500).json({ success: false, message: 'Failed to fetch campaigns' });
+    }
+  }
 } 

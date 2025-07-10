@@ -56,3 +56,52 @@ export const logScan = async (
 
   console.log("Scan logged on-chain:", tx);
 };
+
+export const initialize_campaign = async ({
+  program,
+  wallet,
+  campaign_id,
+  brand,
+  required_skus,
+  scan_count_req,
+  reward_tokens,
+  token_mint,
+  start_date,
+  end_date,
+}: {
+  program: anchor.Program;
+  wallet: any;
+  campaign_id: string;
+  brand: string;
+  required_skus: string[];
+  scan_count_req: number;
+  reward_tokens: number;
+  token_mint: PublicKey;
+  start_date: number; // UNIX timestamp
+  end_date: number;   // UNIX timestamp
+}) => {
+  const [campaignPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from("campaign"), Buffer.from(campaign_id)],
+    program.programId
+  );
+
+  const tx = await program.methods
+    .initializeCampaign(
+      campaign_id,
+      brand,
+      required_skus,
+      scan_count_req,
+      new anchor.BN(reward_tokens),
+      token_mint,
+      new anchor.BN(start_date),
+      new anchor.BN(end_date)
+    )
+    .accounts({
+      campaign: campaignPDA,
+      authority: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  console.log("Campaign initialized on-chain:", tx);
+};

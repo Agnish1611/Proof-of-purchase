@@ -10,12 +10,15 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useProgram } from "@/utils/connection";
 import { PublicKey } from "@solana/web3.js";
 import { scanService } from "@/services/scanService";
+import { campaignService } from "@/services/campaignService";
 
 const tiers = ["Bronze", "Silver", "Gold", "Platinum"];
 const tierThresholds = [10, 50, 100]; // thresholds to reach next tier
 
 const Dashboard = () => {
   const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [userScans, setUserScans] = useState<any[]>([]);
   const wallet = useWallet();
   const { connection } = useConnection();
   const { program } = useProgram();
@@ -28,6 +31,17 @@ const Dashboard = () => {
 
   const [weeklyChange, setWeeklyChange] = useState(0);
   const [monthlyChange, setMonthlyChange] = useState(0);
+
+  const fetchCampaigns = async () => {
+    try {
+      const res = await campaignService.getCampaigns();
+      const campaigns = res.data;
+
+      setCampaigns(campaigns);
+    } catch (err) {
+      console.error("Failed to fetch campaigns", err);
+    }
+  };
 
   const fetchUserAccount = async () => {
     if (!wallet.publicKey || !program) return;
@@ -61,8 +75,11 @@ const Dashboard = () => {
     if (!wallet.publicKey) return;
 
     try {
-      const response = await scanService.getUserScans(wallet.publicKey.toBase58());
+      const response = await scanService.getUserScans(
+        wallet.publicKey.toBase58()
+      );
       const data = response.data;
+      setUserScans(data);
 
       const now = Math.floor(Date.now() / 1000);
       const oneDay = 24 * 60 * 60;
@@ -108,6 +125,12 @@ const Dashboard = () => {
     }
   }, [wallet.publicKey, program]);
 
+  useEffect(() => {
+    if (userScans.length > 0) {
+      fetchCampaigns();
+    }
+  }, [userScans]);
+
   const nextThreshold = tierThresholds[userAccount?.loyaltyTier ?? 0] ?? null;
   const progressPercent =
     userAccount && nextThreshold
@@ -122,36 +145,6 @@ const Dashboard = () => {
     userAccount?.loyaltyTier !== undefined && userAccount.loyaltyTier < 3
       ? tiers[userAccount.loyaltyTier + 1]
       : "Max Tier";
-
-  const mockCampaigns = [
-    {
-      id: 1,
-      title: "Breakfast Essentials",
-      brand: "Kellogg's",
-      requiredScans: 5,
-      reward: 50,
-      status: "active" as const,
-      progress: 3,
-    },
-    {
-      id: 2,
-      title: "Healthy Snacks",
-      brand: "Nature Valley",
-      requiredScans: 3,
-      reward: 30,
-      status: "completed" as const,
-      progress: 3,
-    },
-    {
-      id: 3,
-      title: "Beverage Collection",
-      brand: "Coca-Cola",
-      requiredScans: 8,
-      reward: 80,
-      status: "locked" as const,
-      progress: 0,
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-yellow-50 p-4">
@@ -268,8 +261,18 @@ const Dashboard = () => {
             </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {mockCampaigns.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
+            {campaigns.map((campaign) => (
+              <CampaignCard
+                key={campaign._id}
+                campaign={{
+                  _id: campaign._id,
+                  title: campaign.title,
+                  brand: campaign.brand,
+                  scan_count_required: campaign.scan_count_required,
+                  reward_tokens: campaign.reward_tokens,
+                  status: campaign.status,
+                }}
+              />
             ))}
           </div>
         </div>
