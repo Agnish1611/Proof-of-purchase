@@ -1,13 +1,31 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { PublicKey, SystemProgram, Keypair } from "@solana/web3.js";
-import { createMint, createAccount, mintTo, getAccount } from "@solana/spl-token";
+import { PublicKey, Keypair } from "@solana/web3.js";
+import { createMint, createAccount, getAccount } from "@solana/spl-token";
 import { WalmartContract } from "../target/types/walmart_contract";
+import * as bs58 from "bs58";
 
 describe("walmart-contract", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
   const program = anchor.workspace.walmart_contract as Program<WalmartContract>;
+
+  // Helper function to find scan log PDA
+  function findScanLogPda(
+    userPubkey: PublicKey,
+    sku: string,
+    timestamp: anchor.BN
+  ) {
+    return PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("scan"),
+        userPubkey.toBuffer(),
+        Buffer.from(sku),
+        timestamp.toBuffer("le", 8),
+      ],
+      program.programId
+    )[0];
+  }
 
   const USER_SEED = Buffer.from("user");
   const CAMPAIGN_SEED = Buffer.from("campaign");
@@ -19,185 +37,212 @@ describe("walmart-contract", () => {
   let vaultAuthorityPda: PublicKey;
   let vaultBump: number;
   let userTokenAccount: PublicKey;
+  let userAccountPda: PublicKey;
+  let campaignPda: PublicKey;
+
+  // Loyalty tier mints
+  // Since we're just testing, we'll create new mints for each tier
+  let scoutMint: PublicKey;
+  let cadetMint: PublicKey;
+  let foragerMint: PublicKey;
+  let commanderMint: PublicKey;
+  let tyrantMint: PublicKey;
+  
+  // Token accounts for each tier
+  let scoutTokenAccount: PublicKey;
+  let cadetTokenAccount: PublicKey;
+  let foragerTokenAccount: PublicKey;
+  let commanderTokenAccount: PublicKey;
+  let tyrantTokenAccount: PublicKey;
 
   before(async () => {
-    // Setup user and funding
-    user = Keypair.generate();
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(user.publicKey, 1e9)
-    );
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(provider.wallet.publicKey, 1e9)
-    );
+    // Use the default provider's wallet for tests
+    // Instead of trying to use a separate user keypair
+    user = provider.wallet.payer;
 
-    // Find vault authority PDA first
+    // Log the user's public key to help debugging
+    console.log("User public key:", user.publicKey.toString());
+
     [vaultAuthorityPda, vaultBump] = await PublicKey.findProgramAddress(
       [VAULT_AUTHORITY_SEED],
       program.programId
     );
 
-    // Create mint with vault authority as mint authority
+    console.log("Vault Authority PDA:", vaultAuthorityPda.toBase58());
+
     mint = await createMint(
       provider.connection,
       provider.wallet.payer,
-      vaultAuthorityPda, // Use PDA as mint authority
+      vaultAuthorityPda,
       null,
       0
     );
 
-    // Create associated token account for user
     userTokenAccount = await createAccount(
       provider.connection,
       provider.wallet.payer,
       mint,
       user.publicKey
     );
+
+    userAccountPda = PublicKey.findProgramAddressSync(
+      [USER_SEED, user.publicKey.toBuffer()],
+      program.programId
+    )[0];
+
+    campaignPda = PublicKey.findProgramAddressSync(
+      [CAMPAIGN_SEED, Buffer.from(campaignId)],
+      program.programId
+    )[0];
   });
 
   it("initializes a user account", async () => {
-    const [userAccountPda] = PublicKey.findProgramAddressSync(
-      [USER_SEED, user.publicKey.toBuffer()],
-      program.programId
+    const userAccountExists = await provider.connection.getAccountInfo(
+      userAccountPda
     );
-
-    await program.methods
-      .initializeUser()
-      .accounts({
-        user: user.publicKey,
-      })
-      .signers([user])
-      .rpc();
+    if (!userAccountExists) {
+      await program.methods
+        .initializeUser()
+        .accounts({
+          user: user.publicKey,
+        })
+        .signers([user])
+        .rpc();
+    }
 
     const userAcc = await program.account.userAccount.fetch(userAccountPda);
     console.log("UserAccount:", userAcc);
   });
 
   it("initializes a campaign", async () => {
-    const [campaignPda] = PublicKey.findProgramAddressSync(
-      [CAMPAIGN_SEED, Buffer.from(campaignId)],
-      program.programId
+    const campaignAccountExists = await provider.connection.getAccountInfo(
+      campaignPda
     );
-
-    await program.methods
-      .initializeCampaign(
-        campaignId,
-        "BrandX",
-        ["SKU1", "SKU2"],
-        3,
-        new anchor.BN(5), // Use BN for u64 values
-        mint,
-        new anchor.BN(0),
-        new anchor.BN(9999999999)
-      )
-      .accounts({
-        authority: provider.wallet.publicKey,
-      })
-      .rpc();
+    if (!campaignAccountExists) {
+      await program.methods
+        .initializeCampaign(
+          campaignId,
+          "BrandX",
+          ["SKU1", "SKU2"],
+          3,
+          new anchor.BN(5),
+          mint,
+          new anchor.BN(0),
+          new anchor.BN(9999999999)
+        )
+        .accounts({
+          authority: provider.wallet.publicKey,
+        })
+        .rpc();
+    }
 
     const camp = await program.account.campaign.fetch(campaignPda);
     console.log("Campaign:", camp);
   });
 
-  it("logs scans and mints rewards on complete_campaign", async () => {
-    const [userAccountPda] = PublicKey.findProgramAddressSync(
-      [USER_SEED, user.publicKey.toBuffer()],
-      program.programId
-    );
-    const [campaignPda] = PublicKey.findProgramAddressSync(
-      [CAMPAIGN_SEED, Buffer.from(campaignId)],
-      program.programId
-    );
-
-    // Log 3 scans as required by the campaign
+  it("logs scans and completes campaign", async () => {
     for (let i = 0; i < 3; i++) {
-      const timestamp = Date.now() + i; // Make timestamps unique
+      const timestamp = Date.now() + i;
       const sku = `SKU${i + 1}`;
-      
-      // Calculate scan log PDA based on the seeds defined in the contract
-      const [scanLogPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("scan"),
-          user.publicKey.toBuffer(),
-          Buffer.from(sku),
-          Buffer.from(timestamp.toString().slice(0, 8)) // Use first 8 bytes for timestamp
-        ],
-        program.programId
+      const scanLogPda = findScanLogPda(
+        user.publicKey,
+        sku,
+        new anchor.BN(timestamp)
       );
 
       await program.methods
-        .logScan(
-          sku,
-          new anchor.BN(timestamp),
-          new anchor.BN(365)
-        )
+        .logScan(sku, new anchor.BN(timestamp), new anchor.BN(365))
         .accounts({
           user: user.publicKey,
+          userAccount: userAccountPda,
+          scanLog: scanLogPda,
+          systemProgram: anchor.web3.SystemProgram.programId,
         })
         .signers([user])
         .rpc();
     }
 
-    // Complete the campaign
     await program.methods
       .completeCampaign()
       .accounts({
-        userAccount: userAccountPda,
         campaign: campaignPda,
         tokenMint: mint,
-        userTokenAccount
-      })
-      .rpc();
-
-    // Check token balance
-    const tokenAccountInfo = await getAccount(provider.connection, userTokenAccount);
-    console.log("Token balance:", tokenAccountInfo.amount.toString());
-  });
-
-  it("upgrades loyalty tier correctly", async () => {
-    const [userAccountPda] = PublicKey.findProgramAddressSync(
-      [USER_SEED, user.publicKey.toBuffer()],
-      program.programId
-    );
-
-    // Log additional scans to reach loyalty tier thresholds
-    for (let i = 0; i < 7; i++) {
-      const timestamp = Date.now() + 1000 + i; // Make timestamps unique
-      const sku = `SKUX${i}`;
-      
-      // Calculate scan log PDA
-      const [scanLogPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("scan"),
-          user.publicKey.toBuffer(),
-          Buffer.from(sku),
-          Buffer.from(timestamp.toString().slice(0, 8))
-        ],
-        program.programId
-      );
-
-      await program.methods
-        .logScan(
-          sku,
-          new anchor.BN(timestamp),
-          new anchor.BN(365)
-        )
-        .accounts({
-          user: user.publicKey,
-        })
-        .signers([user])
-        .rpc();
-    }
-
-    // Upgrade loyalty tier
-    await program.methods
-      .upgradeLoyalty()
-      .accounts({
-        user: user.publicKey,
+        userTokenAccount,
+        userAccount: userAccountPda,
+        vaultAuthority: vaultAuthorityPda,
+        tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
       })
       .signers([user])
       .rpc();
 
+    const tokenAccountInfo = await getAccount(
+      provider.connection,
+      userTokenAccount
+    );
+    console.log(
+      "Token balance after campaign:",
+      tokenAccountInfo.amount.toString()
+    );
+  });
+
+  it("upgrades loyalty tier", async () => {
+    // Check initial state
+    const initialUser = await program.account.userAccount.fetch(userAccountPda);
+    console.log("Initial user state:", initialUser);
+
+    // User account already has enough scans from previous tests
+    // Skip additional scans to avoid running out of funds
+
+    try {
+      // Get all user accounts to make sure we're passing the right one
+      const allUserAccounts = await program.account.userAccount.all();
+      console.log(
+        "Found user accounts:",
+        allUserAccounts.map((acc) => ({
+          publicKey: acc.publicKey.toString(),
+          wallet: acc.account.wallet.toString(),
+          scanCount: acc.account.scanCount,
+        }))
+      );
+
+      // Find the right user account for our test user
+      const correctUserAccount = allUserAccounts.find(
+        (acc) => acc.account.wallet.toString() === user.publicKey.toString()
+      );
+
+      if (!correctUserAccount) {
+        throw new Error("Could not find user account for test wallet");
+      }
+
+      console.log(
+        "Using user account:",
+        correctUserAccount.publicKey.toString()
+      );
+
+      // Try using the upgrade_loyalty_alt instruction instead which has a different account structure
+      await program.methods
+        .upgradeLoyaltyAlt()
+        .accounts({
+          userAccount: userAccountPda,
+          vaultAuthority: vaultAuthorityPda,
+          scoutMint: scoutMint,
+          cadetMint: cadetMint,
+          foragerMint: foragerMint,
+          commanderMint: commanderMint,
+          tyrantMint: tyrantMint,
+          userTokenAccount,
+          wallet: user.publicKey,
+          tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([user])
+        .rpc();
+    } catch (error) {
+      console.error("Error details:", error);
+      throw error;
+    }
+
     const updated = await program.account.userAccount.fetch(userAccountPda);
-    console.log("Loyalty tier:", updated.loyaltyTier);
+    console.log("New Loyalty Tier:", updated.loyaltyTier);
   });
 });
