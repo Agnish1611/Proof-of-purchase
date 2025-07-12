@@ -306,7 +306,7 @@ pub struct LogScan<'info> {
 #[derive(Accounts)]
 #[instruction(campaign_id: String, brand: String, required_skus: Vec<String>, scan_count_req: u32, reward_tokens: u64, token_mint: Pubkey, start_date: u64, end_date: u64)]
 pub struct InitializeCampaign<'info> {
-    #[account(init, seeds = [b"campaign", campaign_id.as_bytes()], bump, payer = authority, space = 8 + (4 + 32) + (4 + 32) + (4 + required_skus.len() * 32) + 4 + 8 + 32 + 8 + 8)]
+    #[account(init, seeds = [b"campaign", campaign_id.as_bytes()], bump, payer = authority, space = 8 + 4 + 64 + 4 + 64 + 4 + (10 * (4 + 32)) + 4 + 8 + 32 + 8 + 8)]
     pub campaign: Account<'info, Campaign>,
     #[account(mut)] pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,

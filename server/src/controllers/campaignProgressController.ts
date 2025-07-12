@@ -5,10 +5,18 @@ import { CampaignProgress } from "../models/CampaignProgress";
 export class CampaignProgressController {
   async updateProgress(req: Request, res: Response) {
     try {
+      console.log('inside update progress');
       const { userPublicKey, campaignId, scannedSKU } = req.body;
 
       const campaign = await CampaignModel.findById(campaignId);
       if (!campaign) throw new Error("Campaign not found");
+
+      if (!campaign.required_skus.includes(scannedSKU)) {
+        res.status(400).json({
+          success: false,
+          message: "SKU does not belong to this campaign",
+        });
+      }
 
       const now = new Date();
       if (
@@ -32,16 +40,25 @@ export class CampaignProgressController {
           last_scanned_at: now,
         });
       } else {
-        if (progress.completed) return; // already done
+        if (progress.completed) {
+          res.status(200).json({
+            success: true,
+            message: "Campaign already completed",
+            data: progress,
+          });
+        }
+
         progress.scan_count = Math.min(
           progress.scan_count + 1,
           campaign.scan_count_required
         );
         progress.scanned_skus.push(scannedSKU);
         progress.last_scanned_at = now;
+
         if (progress.scan_count >= campaign.scan_count_required) {
           progress.completed = true;
         }
+
         await progress.save();
       }
 
@@ -75,7 +92,7 @@ export class CampaignProgressController {
           scanned_skus: [],
           scan_count: 0,
           last_scanned_at: undefined,
-        })
+        });
 
         res.status(200).json({
           success: true,

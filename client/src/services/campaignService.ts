@@ -64,6 +64,7 @@ class CampaignService {
     campaignId: string;
     scannedSKU: string;
   }) {
+    console.log('update progress service called');
     const response = await fetch(`${API_BASE_URL}/campaign/progress`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

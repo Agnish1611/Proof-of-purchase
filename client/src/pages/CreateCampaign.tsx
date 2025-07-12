@@ -24,7 +24,7 @@ import { useProgram } from "@/utils/connection";
 const CreateCampaign = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { publicKey, signTransaction } = useWallet();
+  const { wallet } = useWallet();
   const { program } = useProgram();
 
   const [formData, setFormData] = useState({
@@ -91,7 +91,7 @@ const CreateCampaign = () => {
       // Solana on-chain write
       await initialize_campaign({
         program,
-        wallet: publicKey!,
+        wallet: wallet,
         campaign_id: formData.title, // Unique identifier
         brand: formData.brand,
         required_skus: formData.requiredSkus,

@@ -40,10 +40,14 @@ export const ScanModal: React.FC<ScanModalProps> = ({ open, onOpenChange }) => {
       const campaignRes = await campaignService.getCampaigns();
       const allCampaigns = campaignRes.data;
 
+      console.log('@All campaigns: ', allCampaigns);
+
       // ✅ Step 4: Filter campaigns with this SKU
       const matchedCampaigns = allCampaigns.filter((campaign: any) =>
         campaign.required_skus.includes(sku)
       );
+
+      console.log('@matched_campaigns: ', matchedCampaigns);
 
       // ✅ Step 5: Update progress in each matched campaign
       await Promise.all(

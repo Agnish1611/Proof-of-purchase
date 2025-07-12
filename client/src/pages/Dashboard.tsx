@@ -11,14 +11,17 @@ import { useProgram } from "@/utils/connection";
 import { PublicKey } from "@solana/web3.js";
 import { scanService } from "@/services/scanService";
 import { campaignService } from "@/services/campaignService";
+import { upgradeLoyalty } from "@/utils/instructions";
+import { toast } from "sonner";
 
-const tiers = ["Bronze", "Silver", "Gold", "Platinum"];
-const tierThresholds = [10, 50, 100]; // thresholds to reach next tier
+const tiers = ["Scout", "Cadet", "Forager", "Commander", "Tyrant"];
+const tierThresholds = [1, 10, 50, 100];
 
 const Dashboard = () => {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [userScans, setUserScans] = useState<any[]>([]);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const wallet = useWallet();
   const { connection } = useConnection();
   const { program } = useProgram();
@@ -126,9 +129,7 @@ const Dashboard = () => {
   }, [wallet.publicKey, program]);
 
   useEffect(() => {
-    if (userScans.length > 0) {
-      fetchCampaigns();
-    }
+    fetchCampaigns();
   }, [userScans]);
 
   const nextThreshold = tierThresholds[userAccount?.loyaltyTier ?? 0] ?? null;
@@ -230,6 +231,33 @@ const Dashboard = () => {
                 </div>
                 <Progress value={progressPercent} className="h-2" />
               </div>
+
+              {/* 👇 Add Upgrade Button */}
+              {progressPercent === 100 && nextThreshold && (
+                <Button
+                  className="mt-4 w-full"
+                  onClick={async () => {
+                    if (!program || !wallet.publicKey) return;
+                    try {
+                      setIsUpgrading(true);
+                      toast.loading("Upgrading loyalty tier...");
+                      await upgradeLoyalty(program, wallet, connection);
+                      toast.success("Loyalty tier upgraded successfully!");
+                      fetchUserAccount(); // Refresh state
+                    } catch (err) {
+                      console.error("Upgrade failed:", err);
+                      toast.error("Failed to upgrade loyalty tier");
+                    } finally {
+                      setIsUpgrading(false);
+                      toast.dismiss(); // remove loading toast
+                    }
+                  }}
+                  disabled={isUpgrading || !wallet.connected}
+                  variant="outline"
+                >
+                  {isUpgrading ? "Upgrading..." : "Upgrade Loyalty"}
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -272,6 +300,11 @@ const Dashboard = () => {
                   reward_tokens: campaign.reward_tokens,
                   status: campaign.status,
                 }}
+                onProgressUpdated={() => {
+                  fetchUserAccount();
+                  fetchScanStats();
+                  fetchCampaigns();
+                }}
               />
             ))}
           </div>
@@ -282,8 +315,9 @@ const Dashboard = () => {
           onOpenChange={(open) => {
             setScanModalOpen(open);
             if (!open) {
-              fetchUserAccount(); // Refresh after scan
-              fetchScanStats(); // Refresh stats
+              fetchUserAccount();
+              fetchScanStats();
+              fetchCampaigns();
             }
           }}
         />

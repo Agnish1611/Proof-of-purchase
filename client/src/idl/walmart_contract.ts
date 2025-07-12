@@ -310,29 +310,161 @@ export type WalmartContract = {
       "accounts": [
         {
           "name": "userAccount",
-          "writable": true,
+          "writable": true
+        },
+        {
+          "name": "vaultAuthority",
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
+                  118,
+                  97,
                   117,
-                  115,
-                  101,
-                  114
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
                 ]
-              },
-              {
-                "kind": "account",
-                "path": "user"
               }
             ]
           }
         },
         {
-          "name": "user",
+          "name": "scoutMint",
+          "writable": true
+        },
+        {
+          "name": "cadetMint",
+          "writable": true
+        },
+        {
+          "name": "foragerMint",
+          "writable": true
+        },
+        {
+          "name": "commanderMint",
+          "writable": true
+        },
+        {
+          "name": "tyrantMint",
+          "writable": true
+        },
+        {
+          "name": "userTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "This is the wallet that will pay for the transaction and must sign it"
+          ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "user",
+          "docs": [
+            "The user account that is being upgraded"
+          ],
+          "signer": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "upgradeLoyaltyAlt",
+      "discriminator": [
+        221,
+        66,
+        30,
+        203,
+        82,
+        25,
+        176,
+        227
+      ],
+      "accounts": [
+        {
+          "name": "userAccount",
+          "writable": true
+        },
+        {
+          "name": "vaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "scoutMint",
+          "writable": true
+        },
+        {
+          "name": "cadetMint",
+          "writable": true
+        },
+        {
+          "name": "foragerMint",
+          "writable": true
+        },
+        {
+          "name": "commanderMint",
+          "writable": true
+        },
+        {
+          "name": "tyrantMint",
+          "writable": true
+        },
+        {
+          "name": "userTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "wallet",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
           "name": "systemProgram",
